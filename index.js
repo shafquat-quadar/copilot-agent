@@ -6,9 +6,14 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const { CLIENT_ID, TENANT_ID, CS_API_ENDPOINT, AGENT_ID } = process.env;
+const {
+  appClientId,
+  tenantId,
+  environmentId,
+  agentIdentifier
+} = process.env;
 
-if (!CLIENT_ID || !TENANT_ID || !CS_API_ENDPOINT || !AGENT_ID) {
+if (!appClientId || !tenantId || !environmentId || !agentIdentifier) {
   throw new Error('Missing required environment variables');
 }
 
@@ -25,18 +30,18 @@ if (!input.prompt) {
 }
 
 const credential = new DeviceCodeCredential({
-  tenantId: TENANT_ID,
-  clientId: CLIENT_ID,
+  tenantId,
+  clientId: appClientId,
   userPromptCallback: (info) => {
     console.error(info.message);
   }
 });
 
 const settings = new ConnectionSettings({
-  directConnectUrl: CS_API_ENDPOINT,
-  agentIdentifier: AGENT_ID,
-  appClientId: CLIENT_ID,
-  tenantId: TENANT_ID
+  environmentId,
+  agentIdentifier,
+  appClientId,
+  tenantId
 });
 
 async function main() {

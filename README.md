@@ -10,10 +10,10 @@ A simple script to call a Copilot Studio agent from Node.js using device code au
    ```
 2. Create a `.env` file with the following variables:
    ```env
-   CLIENT_ID=<application client id>
-   TENANT_ID=<azure tenant id>
-   CS_API_ENDPOINT=<copilot studio endpoint>
-   AGENT_ID=<agent identifier>
+   environmentId=<environment id of the CopilotStudio app>
+   agentIdentifier=<schema name of the copilot>
+   tenantId=<azure tenant id>
+   appClientId=<application client id>
    ```
 
 ## Usage
