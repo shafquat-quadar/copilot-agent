@@ -1,18 +1,21 @@
 {
   "name": "copilot-agent",
-  "version": "1.0.0",
-  "description": "Call co-pilot studio agent from node.",
+  "version": "1.1.0",
+  "description": "Example Node.js app to call a Copilot Studio agent using MSAL interactive authentication.",
   "main": "index.js",
   "scripts": {
-    "test": "node -e \"console.log(\\\"no tests\\\")\""
+    "start": "node index.js",
+    "test": "node -e \"console.log('no tests')\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@azure/identity": "^4.10.2",
-    "@microsoft/agents-copilotstudio-client": "^1.0.0",
-    "dotenv": "^17.2.1"
+    "@azure/msal-node": "^3.6.4",
+    "@azure/msal-node-extensions": "^1.5.18",
+    "@microsoft/copilotstudio-client": "^1.0.0",
+    "dotenv": "^17.2.1",
+    "open": "^9.0.0"
   }
 }
