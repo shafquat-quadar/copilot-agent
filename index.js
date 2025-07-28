@@ -46,8 +46,8 @@ async function acquireToken(pca, scopes) {
 
   const result = await pca.acquireTokenInteractive({
     scopes,
-    openBrowser: (url) => {
-      const open = require('open');
+    openBrowser: async (url) => {
+      const { default: open } = await import('open');
       return open(url);
     }
   });
