@@ -1,82 +1,103 @@
-const fs = require('fs');
+require('dotenv').config();
+const { PublicClientApplication } = require('@azure/msal-node');
+const { FilePersistence, PersistenceCachePlugin } = require('@azure/msal-node-extensions');
+const { CopilotStudioClient, ConnectionSettings } = require('@microsoft/copilotstudio-client');
 const path = require('path');
-const { DeviceCodeCredential } = require('@azure/identity');
-const { CopilotStudioClient, ConnectionSettings } = require('@microsoft/agents-copilotstudio-client');
-const dotenv = require('dotenv');
+const os = require('os');
 
-dotenv.config();
+const { environmentId, agentIdentifier, tenantId, appClientId } = process.env;
 
-const {
-  appClientId,
-  tenantId,
-  environmentId,
-  agentIdentifier
-} = process.env;
-
-if (!appClientId || !tenantId || !environmentId || !agentIdentifier) {
-  throw new Error('Missing required environment variables');
+if (!environmentId || !agentIdentifier || !tenantId || !appClientId) {
+  console.error('Missing required environment variables');
+  process.exit(1);
 }
 
-const inputPath = process.argv[2];
-if (!inputPath) {
-  throw new Error('Usage: node index.js <input.json>');
+async function createPublicClient() {
+  const cachePath = path.join(os.homedir(), '.msal_cache.json');
+  const persistence = await FilePersistence.create(cachePath);
+  const cachePlugin = new PersistenceCachePlugin(persistence);
+
+  return new PublicClientApplication({
+    auth: {
+      clientId: appClientId,
+      authority: `https://login.microsoftonline.com/${tenantId}`
+    },
+    cache: {
+      cachePlugin
+    }
+  });
 }
 
-const fileContent = fs.readFileSync(path.resolve(inputPath), 'utf8');
-const input = JSON.parse(fileContent);
-
-if (!input.prompt) {
-  throw new Error('Input JSON must contain a prompt');
-}
-
-const credential = new DeviceCodeCredential({
-  tenantId,
-  clientId: appClientId,
-  userPromptCallback: (info) => {
-    console.error(info.message);
-  }
-});
-
-const settings = new ConnectionSettings({
-  environmentId,
-  agentIdentifier,
-  appClientId,
-  tenantId
-});
-
-async function main() {
-  const scope = CopilotStudioClient.scopeFromSettings(settings);
-  const tokenResponse = await credential.getToken(scope);
-  if (!tokenResponse || !tokenResponse.token) {
-    throw new Error('Authentication failed');
-  }
-
-  const client = new CopilotStudioClient(settings, tokenResponse.token);
-
-  let sessionId = input.sessionId;
-  if (!sessionId) {
-    const act = await client.startConversationAsync(true);
-    sessionId = act.conversation && act.conversation.id;
-    if (!sessionId) {
-      throw new Error('Failed to obtain sessionId');
+async function acquireToken(pca, scopes) {
+  const accounts = await pca.getTokenCache().getAllAccounts();
+  if (accounts.length > 0) {
+    try {
+      const result = await pca.acquireTokenSilent({
+        account: accounts[0],
+        scopes
+      });
+      if (result && result.accessToken) {
+        return result.accessToken;
+      }
+    } catch (err) {
+      // fall through to interactive login
     }
   }
 
-  const activities = await client.askQuestionAsync(input.prompt, sessionId);
-  const replyActivity = activities.find(a => a.text);
-  if (!replyActivity || !replyActivity.text) {
-    throw new Error('Malformed response from agent');
+  const result = await pca.acquireTokenInteractive({
+    scopes,
+    openBrowser: (url) => {
+      const open = require('open');
+      return open(url);
+    }
+  });
+  if (!result || !result.accessToken) {
+    throw new Error('Token acquisition failed');
+  }
+  return result.accessToken;
+}
+
+async function main() {
+  const settings = new ConnectionSettings({
+    environmentId,
+    agentIdentifier,
+    appClientId,
+    tenantId
+  });
+
+  const scope = CopilotStudioClient.scopeFromSettings(settings);
+
+  const pca = await createPublicClient();
+  const token = await acquireToken(pca, [scope]);
+
+  const client = new CopilotStudioClient(settings, token);
+
+  let sessionId;
+  try {
+    const act = await client.startConversationAsync(true);
+    sessionId = act.conversation && act.conversation.id;
+  } catch (err) {
+    throw new Error('Failed to create session');
+  }
+  if (!sessionId) {
+    throw new Error('No session ID returned');
   }
 
-  const output = {
-    reply: replyActivity.text,
-    sessionId
-  };
+  let activities;
+  try {
+    activities = await client.askQuestionAsync('Hello, what can you do?', sessionId);
+  } catch (err) {
+    throw new Error('Agent communication failed');
+  }
+  const reply = activities.find(a => a.text);
+  if (!reply) {
+    throw new Error('Malformed agent response');
+  }
 
-  process.stdout.write(JSON.stringify(output, null, 2));
+  console.log(reply.text);
 }
 
 main().catch(err => {
-  console.error(err.message);
+  console.error(err.message || err);
   process.exit(1);
 });
